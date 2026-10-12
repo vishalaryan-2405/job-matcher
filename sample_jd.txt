@@ -1,0 +1,18 @@
+Junior Machine Learning Engineer
+Location: Hyderabad (Hybrid)
+
+About the role
+We are looking for a Junior ML Engineer to build and deploy machine learning and LLM-powered features.
+
+Requirements
+- 0-2 years of experience (internships count)
+- Strong Python and SQL
+- Hands-on experience with scikit-learn, pandas, NumPy
+- Experience building REST APIs with FastAPI or Flask
+- Familiarity with LLMs, prompt engineering and RAG
+- Basic Docker and cloud deployment (AWS or GCP)
+
+Nice to have
+- LangChain or LlamaIndex
+- Vector databases (pgvector, Chroma, Pinecone)
+- CI/CD with GitHub Actions
