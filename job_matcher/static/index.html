@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Matcher</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F2F5F3;
+    --panel: #FFFFFF;
+    --ink: #16302B;
+    --ink-soft: #4E625D;
+    --rule: #D6E0DB;
+    --strong: #23825F;
+    --possible: #B97A12;
+    --weak: #8C9A96;
+    --track: #E3EAE6;
+    --focus: #2C6FB7;
+    --error-bg: #FBEDEA;
+    --error-ink: #9A2F1F;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0E1A17; --panel: #142420; --ink: #E4EEEA; --ink-soft: #9DB2AC;
+      --rule: #25392F; --strong: #49B88C; --possible: #E0A43D; --weak: #71837E;
+      --track: #22362F; --focus: #7DB4F0; --error-bg: #3A1D17; --error-ink: #F3B4A6;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Atkinson Hyperlegible", system-ui, sans-serif; font-size: 16px; line-height: 1.5;
+  }
+  h1, h2, .score-num, .brand { font-family: "Bricolage Grotesque", system-ui, sans-serif; }
+  a { color: inherit; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 24px 16px 64px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin-bottom: 28px; }
+  .brand { white-space: nowrap; }
+  .model { overflow-wrap: anywhere; }
+  .brand { font-weight: 800; font-size: 20px; letter-spacing: -0.01em; }
+  .model { font-size: 14px; color: var(--ink-soft); }
+  .model.bad { color: var(--error-ink); }
+
+  .layout { display: grid; grid-template-columns: 380px 1fr; gap: 40px; align-items: start; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; gap: 28px; } }
+
+  /* ---------- form panel ---------- */
+  .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 14px; padding: 24px; position: sticky; top: 24px; }
+  @media (max-width: 860px) { .panel { position: static; } }
+  h1 { font-size: 30px; line-height: 1.1; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; }
+  .lede { color: var(--ink-soft); margin: 0 0 22px; }
+
+  .field { margin-bottom: 18px; }
+  label.lbl { display: block; font-weight: 700; margin-bottom: 6px; }
+  .hint { font-size: 14px; color: var(--ink-soft); margin-top: 6px; }
+  input[type=text], input[type=url], textarea {
+    width: 100%; font: inherit; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--rule); border-radius: 8px; padding: 10px 12px;
+  }
+  textarea { min-height: 160px; resize: vertical; }
+
+  .drop {
+    display: flex; align-items: center; gap: 12px; border: 1.5px dashed var(--rule); border-radius: 10px;
+    padding: 14px; cursor: pointer; background: var(--bg);
+  }
+  .drop:hover, .drop.over { border-color: var(--strong); }
+  .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .drop .file-name { font-weight: 700; word-break: break-all; }
+  .drop .file-sub { font-size: 14px; color: var(--ink-soft); }
+  .file-icon { flex: none; width: 34px; height: 40px; border: 1.5px solid var(--ink-soft); border-radius: 4px 10px 4px 4px; position: relative; }
+  .file-icon::after { content: ""; position: absolute; left: 7px; right: 7px; top: 14px; height: 10px; border-top: 1.5px solid var(--ink-soft); border-bottom: 1.5px solid var(--ink-soft); }
+  .drop.has-file .file-icon { border-color: var(--strong); }
+
+  .modes { display: flex; gap: 4px; background: var(--bg); border: 1px solid var(--rule); border-radius: 10px; padding: 4px; margin-bottom: 14px; }
+  .modes button {
+    flex: 1; font: inherit; font-weight: 700; color: var(--ink-soft); background: none; border: 0;
+    border-radius: 7px; padding: 8px; cursor: pointer;
+  }
+  .modes button[aria-selected=true] { background: var(--panel); color: var(--ink); box-shadow: 0 0 0 1px var(--rule); }
+
+  .go {
+    width: 100%; font: inherit; font-weight: 700; font-size: 17px; color: #fff; background: var(--ink);
+    border: 0; border-radius: 10px; padding: 13px; cursor: pointer;
+  }
+  @media (prefers-color-scheme: dark) { .go { color: var(--bg); } }
+  .go:disabled { opacity: .55; cursor: progress; }
+  .form-error { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--error-bg); color: var(--error-ink); font-size: 15px; }
+
+  /* ---------- results ---------- */
+  .empty { padding: 8px 0; max-width: 56ch; }
+  .empty h2 { font-size: 24px; margin: 0 0 10px; letter-spacing: -0.01em; }
+  .empty p { color: var(--ink-soft); margin: 0 0 12px; }
+  .empty ul { margin: 0; padding-left: 20px; color: var(--ink-soft); }
+  .empty li { margin-bottom: 6px; }
+
+  .progress h2, .summary h2 { font-size: 24px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .step { color: var(--ink-soft); margin: 0 0 14px; min-height: 1.5em; }
+  .bar { height: 8px; border-radius: 99px; background: var(--track); overflow: hidden; }
+  .bar span { display: block; height: 100%; width: 0; background: var(--strong); border-radius: 99px; transition: width .4s ease; }
+  .bar.indeterminate span { width: 30%; animation: slide 1.4s ease-in-out infinite; }
+  @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+  @media (prefers-reduced-motion: reduce) { .bar span { transition: none; } .bar.indeterminate span { animation: none; width: 100%; opacity: .4; } }
+
+  .summary { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 12px; padding-bottom: 16px; border-bottom: 2px solid var(--ink); }
+  .summary p { margin: 0; color: var(--ink-soft); }
+  .toggle { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--ink-soft); cursor: pointer; }
+  .toggle input { width: 18px; height: 18px; accent-color: var(--strong); }
+
+  .profile { padding: 14px 0; border-bottom: 1px solid var(--rule); font-size: 15px; color: var(--ink-soft); }
+  .profile strong { color: var(--ink); }
+
+  ol.results { list-style: none; margin: 0; padding: 0; }
+  .role { display: grid; grid-template-columns: 110px 1fr; gap: 20px; padding: 22px 0; border-bottom: 1px solid var(--rule); }
+  @media (max-width: 520px) { .role { grid-template-columns: 1fr; gap: 10px; } }
+  .score { display: flex; flex-direction: column; gap: 8px; }
+  .score-num { font-size: 46px; line-height: .9; font-weight: 800; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+  .score-num small { font-size: 15px; font-weight: 500; letter-spacing: 0; color: var(--ink-soft); }
+  .fit { height: 6px; border-radius: 99px; background: var(--track); overflow: hidden; }
+  .fit span { display: block; height: 100%; border-radius: 99px; }
+  .strong .score-num { color: var(--strong); } .strong .fit span { background: var(--strong); }
+  .possible .score-num { color: var(--possible); } .possible .fit span { background: var(--possible); }
+  .weak .score-num { color: var(--weak); } .weak .fit span { background: var(--weak); }
+  .verdict { font-size: 14px; font-weight: 700; white-space: nowrap; }
+  .strong .verdict { color: var(--strong); } .possible .verdict { color: var(--possible); } .weak .verdict { color: var(--weak); }
+
+  .role h3 { font-family: "Bricolage Grotesque", system-ui, sans-serif; font-size: 21px; line-height: 1.25; font-weight: 700; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .where { color: var(--ink-soft); font-size: 15px; margin: 0 0 12px; }
+  .reasons { margin: 0 0 12px; padding: 0; list-style: none; max-width: 70ch; }
+  .reasons li { position: relative; padding-left: 20px; margin-bottom: 4px; }
+  .reasons li::before { content: ""; position: absolute; left: 3px; top: .62em; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-soft); }
+  .missing { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 14px; font-size: 14px; }
+  .missing span.tag { border: 1px solid var(--rule); border-radius: 99px; padding: 2px 10px; background: var(--panel); }
+  .missing .k { color: var(--ink-soft); margin-right: 2px; }
+  .apply { display: inline-block; font-weight: 700; text-decoration: none; border-bottom: 2px solid var(--strong); padding-bottom: 1px; }
+  .apply:hover { color: var(--strong); }
+
+  .run-error { padding: 18px; border-radius: 12px; background: var(--error-bg); color: var(--error-ink); max-width: 70ch; }
+  .run-error h2 { font-size: 20px; margin: 0 0 6px; }
+  .run-error p { margin: 0; }
+  .run-error .alt {
+    margin-top: 14px; font: inherit; font-weight: 700; color: var(--error-ink); background: none;
+    border: 1.5px solid currentColor; border-radius: 8px; padding: 8px 14px; cursor: pointer;
+  }
+  .none { padding: 22px 0; color: var(--ink-soft); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">Job Matcher</div>
+    <div class="model" id="model">Checking settings…</div>
+  </header>
+
+  <div class="layout">
+    <form class="panel" id="form" novalidate>
+      <h1>Which of their open roles fit you?</h1>
+      <p class="lede">Upload your resume and paste a company's careers page. You'll get the roles that match, ranked, with what you're missing.</p>
+
+      <div class="field" id="pw-field" hidden>
+        <label class="lbl" for="pw">Password</label>
+        <input type="password" id="pw" autocomplete="current-password">
+        <div class="hint">This site is private. Ask its owner for the password.</div>
+      </div>
+
+      <div class="field">
+        <span class="lbl" id="resume-lbl">Your resume</span>
+        <label class="drop" id="drop" aria-labelledby="resume-lbl">
+          <span class="file-icon" aria-hidden="true"></span>
+          <span>
+            <span class="file-name" id="file-name">Choose a PDF or .txt file</span><br>
+            <span class="file-sub" id="file-sub">or drop it here</span>
+          </span>
+          <input type="file" id="resume" name="resume" accept=".pdf,.txt,.md">
+        </label>
+      </div>
+
+      <div class="modes" role="tablist" aria-label="What to match against">
+        <button type="button" role="tab" id="tab-url" aria-selected="true" aria-controls="pane-url">Careers page</button>
+        <button type="button" role="tab" id="tab-jd" aria-selected="false" aria-controls="pane-jd">Paste a job</button>
+      </div>
+
+      <div id="pane-url" role="tabpanel" aria-labelledby="tab-url">
+        <div class="field">
+          <label class="lbl" for="url">Careers page link</label>
+          <input type="url" id="url" placeholder="https://jobs.lever.co/company" autocomplete="off">
+          <div class="hint">Greenhouse, Lever and Ashby boards work best. Most company careers pages work too.</div>
+        </div>
+        <div class="field">
+          <label class="lbl" for="location">Location <span style="font-weight:400;color:var(--ink-soft)">(optional)</span></label>
+          <input type="text" id="location" placeholder="e.g. India, Hyderabad, Bangalore">
+          <div class="hint">Remote roles are always kept.</div>
+        </div>
+      </div>
+
+      <div id="pane-jd" role="tabpanel" aria-labelledby="tab-jd" hidden>
+        <div class="field">
+          <label class="lbl" for="title">Job title <span style="font-weight:400;color:var(--ink-soft)">(optional)</span></label>
+          <input type="text" id="title" placeholder="e.g. Junior ML Engineer">
+        </div>
+        <div class="field">
+          <label class="lbl" for="jd">Job description</label>
+          <textarea id="jd" placeholder="Paste the full job description here"></textarea>
+          <div class="hint">Use this when a careers page can't be read.</div>
+        </div>
+      </div>
+
+      <button class="go" id="go" type="submit">Find matching roles</button>
+      <div class="form-error" id="form-error" role="alert" hidden></div>
+    </form>
+
+    <main id="out" aria-live="polite">
+      <section class="empty" id="empty">
+        <h2>Your matches will appear here</h2>
+        <p>The app reads every open role on the page, shortlists the closest ones on your computer, then asks the AI model to score each shortlisted role against your resume.</p>
+        <ul>
+          <li>Scoring takes about a minute on free models.</li>
+          <li>Your resume is parsed once and cached, so later runs start faster.</li>
+          <li>You apply yourself. The app never submits anything.</li>
+        </ul>
+      </section>
+
+      <section class="progress" id="progress" hidden>
+        <h2 id="progress-title">Working on it</h2>
+        <p class="step" id="step">Starting</p>
+        <div class="bar indeterminate" id="bar"><span></span></div>
+      </section>
+
+      <section class="run-error" id="run-error" role="alert" hidden>
+        <h2 id="run-error-title">That didn't work</h2>
+        <p id="run-error-msg"></p>
+        <button type="button" class="alt" id="to-paste" hidden>Paste a job instead</button>
+      </section>
+
+      <section id="results" hidden>
+        <div class="summary">
+          <div>
+            <h2 id="sum-title"></h2>
+            <p id="sum-sub"></p>
+          </div>
+          <label class="toggle"><input type="checkbox" id="show-weak"> Show weaker matches</label>
+        </div>
+        <div class="profile" id="profile"></div>
+        <ol class="results" id="list"></ol>
+        <p class="none" id="none" hidden>No strong or possible matches here. Turn on "Show weaker matches" to see the rest.</p>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let mode = "url";
+let file = null;
+let lastRun = null;
+
+// ---------- settings check ----------
+let locked = false;
+function savedPw() { try { return sessionStorage.getItem("pw") || ""; } catch { return ""; } }
+function headers() { return locked ? { "X-App-Password": $("pw").value } : {}; }
+fetch("/api/health").then(r => r.json()).then(h => {
+  const el = $("model");
+  locked = !!h.locked;
+  $("pw-field").hidden = !locked;
+  if (locked) $("pw").value = savedPw();
+  if (h.ok) { el.textContent = h.model ? "Model: " + h.model : "Ready"; }
+  else { el.textContent = h.error; el.classList.add("bad"); }
+}).catch(() => { $("model").textContent = "Can't reach the server"; $("model").classList.add("bad"); });
+
+// ---------- resume picker ----------
+function setFile(f) {
+  file = f || null;
+  $("drop").classList.toggle("has-file", !!file);
+  $("file-name").textContent = file ? file.name : "Choose a PDF or .txt file";
+  $("file-sub").textContent = file ? `${Math.round(file.size / 1024)} KB · click to change` : "or drop it here";
+}
+$("resume").addEventListener("change", e => setFile(e.target.files[0]));
+const drop = $("drop");
+["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => { if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
+
+// ---------- mode tabs ----------
+function setMode(m) {
+  mode = m;
+  $("tab-url").setAttribute("aria-selected", m === "url");
+  $("tab-jd").setAttribute("aria-selected", m === "jd");
+  $("pane-url").hidden = m !== "url";
+  $("pane-jd").hidden = m !== "jd";
+  $("go").textContent = m === "url" ? "Find matching roles" : "Score this job";
+}
+$("tab-url").addEventListener("click", () => setMode("url"));
+$("tab-jd").addEventListener("click", () => setMode("jd"));
+
+// ---------- views ----------
+function show(view) {
+  for (const id of ["empty", "progress", "run-error", "results"]) $(id).hidden = id !== view;
+}
+function formError(msg) { $("form-error").textContent = msg; $("form-error").hidden = !msg; }
+
+// ---------- submit ----------
+$("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  formError("");
+  if (locked && !$("pw").value) return formError("Enter the password first.");
+  if (!file) return formError("Choose your resume file first.");
+  if (locked) { try { sessionStorage.setItem("pw", $("pw").value); } catch {} }
+  const body = new FormData();
+  body.append("resume", file);
+  let endpoint;
+  if (mode === "url") {
+    const url = $("url").value.trim();
+    if (!/^https?:\/\//.test(url)) return formError("Paste the full careers page link, starting with https://");
+    body.append("url", url);
+    body.append("location", $("location").value.trim());
+    endpoint = "/api/match";
+  } else {
+    const jd = $("jd").value.trim();
+    if (jd.length < 50) return formError("Paste the full job description, at least a few lines.");
+    body.append("description", jd);
+    body.append("title", $("title").value.trim());
+    endpoint = "/api/score";
+  }
+
+  $("go").disabled = true;
+  $("progress-title").textContent = mode === "url" ? "Finding matching roles" : "Scoring the job";
+  $("step").textContent = "Starting";
+  $("bar").className = "bar indeterminate"; $("bar").firstElementChild.style.width = "";
+  show("progress");
+  try {
+    const r = await fetch(endpoint, { method: "POST", body, headers: headers() });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || "The server refused the request.");
+    poll(data.job_id);
+  } catch (err) {
+    $("go").disabled = false;
+    showError(friendly(err));
+  }
+});
+
+// ---------- polling ----------
+async function poll(id) {
+  try {
+    const r = await fetch(`/api/jobs/${id}`, { headers: headers() });
+    const job = await r.json();
+    if (!r.ok) throw new Error(job.detail || "Lost track of this run.");
+    $("step").textContent = job.step;
+    if (job.total) {
+      $("bar").className = "bar";
+      $("bar").firstElementChild.style.width = `${Math.round((job.done / job.total) * 100)}%`;
+    }
+    if (job.status === "running") return setTimeout(() => poll(id), 1000);
+    $("go").disabled = false;
+    if (job.status === "error") { return showError(job.error, job.can_paste); }
+    lastRun = job;
+    render();
+  } catch (err) {
+    $("go").disabled = false;
+    showError(friendly(err));
+  }
+}
+
+// ---------- errors ----------
+function friendly(err) {
+  // fetch() throws a TypeError when the server isn't running at all
+  return err instanceof TypeError
+    ? "Can't reach the app's server. Check that uvicorn is still running in your terminal."
+    : err.message;
+}
+function showError(msg, canPaste) {
+  $("run-error-title").textContent = canPaste ? "Couldn't read this careers page" : "That didn't work";
+  $("run-error-msg").textContent = msg;
+  $("to-paste").hidden = !canPaste;
+  show("run-error");
+}
+$("to-paste").addEventListener("click", () => { setMode("jd"); $("jd").focus(); });
+
+// ---------- results ----------
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function band(score) { return score >= 75 ? "strong" : score >= 50 ? "possible" : "weak"; }
+
+function render() {
+  const job = lastRun;
+  const all = job.results || [];
+  const showWeak = $("show-weak").checked;
+  const good = all.filter(r => r.score >= 50);
+  const visible = showWeak ? all : good;
+
+  $("sum-title").textContent = all.length === 1 && job.method === "pasted job description"
+    ? "Your fit for this job"
+    : `${good.length} of ${all.length} shortlisted roles match`;
+  $("sum-sub").textContent = job.method === "pasted job description"
+    ? "Scored from the job description you pasted."
+    : `Read ${job.found} open roles using ${job.method}` + (job.kept !== job.found ? `, ${job.kept} in your location.` : ".");
+
+  const p = job.profile;
+  $("profile").innerHTML = p
+    ? `Matched as <strong>${esc(p.name || "you")}</strong>, ${esc(p.years_experience)} years of experience, skills including ${esc((p.skills || []).slice(0, 8).join(", "))}.`
+    : "";
+
+  $("list").innerHTML = visible.map(r => {
+    const b = band(r.score), jb = r.job;
+    const reasons = (r.reasons || []).map(x => `<li>${esc(x)}</li>`).join("");
+    const missing = (r.missing_skills || []).length
+      ? `<div class="missing"><span class="k">Missing:</span>${r.missing_skills.map(m => `<span class="tag">${esc(m)}</span>`).join("")}</div>` : "";
+    const where = [jb.location, jb.department].filter(Boolean).map(esc).join(", ");
+    const link = jb.url ? `<a class="apply" href="${esc(jb.url)}" target="_blank" rel="noopener">Open the job posting</a>` : "";
+    return `<li class="role ${b}">
+      <div class="score">
+        <div class="score-num">${r.score}<small>/100</small></div>
+        <div class="fit" aria-hidden="true"><span style="width:${r.score}%"></span></div>
+        <div class="verdict">${esc(r.verdict)}</div>
+      </div>
+      <div>
+        <h3>${esc(jb.title)}</h3>
+        ${where ? `<p class="where">${where}</p>` : `<p class="where"></p>`}
+        ${reasons ? `<ul class="reasons">${reasons}</ul>` : ""}
+        ${missing}
+        ${link}
+      </div>
+    </li>`;
+  }).join("");
+  $("none").hidden = visible.length > 0;
+  show("results");
+}
+$("show-weak").addEventListener("change", () => lastRun && render());
+</script>
+</body>
+</html>

@@ -77,13 +77,19 @@ def score_job(settings: Settings, profile: CandidateProfile, job: Job) -> MatchR
 
 
 def match_jobs(settings: Settings, profile: CandidateProfile, jobs: list[Job],
-               describe=None) -> list[MatchResult]:
-    """Prefilter, then LLM-score the shortlist. `describe` fills empty descriptions."""
+               describe=None, on_progress=None) -> list[MatchResult]:
+    """Prefilter, then LLM-score the shortlist.
+
+    describe(job)            -> fills an empty job description
+    on_progress(done, total, title) -> lets a caller (the web app) show progress
+    """
     shortlist = prefilter(profile, jobs, settings.max_jobs_to_score)
     log.info("Shortlisted %d of %d jobs for LLM scoring", len(shortlist), len(jobs))
 
     results = []
     for index, job in enumerate(shortlist, start=1):
+        if on_progress:
+            on_progress(index - 1, len(shortlist), job.title)
         if not job.description and describe:
             job.description = describe(job)
         log.info("[%d/%d] Scoring: %s", index, len(shortlist), job.title)

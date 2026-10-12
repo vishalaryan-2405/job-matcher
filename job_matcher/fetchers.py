@@ -233,6 +233,51 @@ def make_client() -> httpx.Client:
     return httpx.Client(headers=HEADERS, timeout=30, follow_redirects=True)
 
 
+PASTE_TIP = "Open the job in your browser, copy its description, and use \"Paste a job\" instead."
+
+
+def friendly_error(exc: Exception, url: str, platform: str | None = None) -> PageNotReadable:
+    """Turn a low-level network error into a message a person can act on.
+
+    Users should never see "403" or a Python exception. Each case says what
+    happened in plain words and what to do next. The original error is still
+    logged, so you can debug it from the terminal.
+    """
+    site = urlparse(url).netloc or url
+    log.warning("Fetching %s failed: %r", url, exc)
+
+    if isinstance(exc, httpx.HTTPStatusError):
+        code = exc.response.status_code
+        if platform and code == 404:
+            return PageNotReadable(
+                f"No {platform.title()} job board was found at this link. "
+                "Check the company name in the link, or paste the company's main careers page instead.")
+        if code in (401, 403):
+            return PageNotReadable(
+                f"{site} doesn't allow automated access to this careers page, so its jobs can't be read here. "
+                + PASTE_TIP)
+        if code == 404:
+            return PageNotReadable(
+                f"This page wasn't found on {site}. The link may be old or mistyped. "
+                "Open the company's careers page in your browser and copy the link from the address bar.")
+        if code == 429:
+            return PageNotReadable(
+                f"{site} is limiting requests right now. Wait a few minutes and try again.")
+        if code >= 500:
+            return PageNotReadable(
+                f"{site} is having problems on its side right now. Try again in a few minutes.")
+        return PageNotReadable(f"{site} refused the request. " + PASTE_TIP)
+
+    if isinstance(exc, httpx.TimeoutException):
+        return PageNotReadable(f"{site} took too long to respond. Try again, or {PASTE_TIP[0].lower() + PASTE_TIP[1:]}")
+    if isinstance(exc, httpx.ConnectError):
+        return PageNotReadable(
+            f"Couldn't connect to {site}. Check the link and your internet connection.")
+    if isinstance(exc, (httpx.InvalidURL, httpx.UnsupportedProtocol)):
+        return PageNotReadable("That doesn't look like a valid web link. Paste the full link, starting with https://")
+    return PageNotReadable(f"Couldn't read {site}. " + PASTE_TIP)
+
+
 def fetch_jobs(settings: Settings, url: str, client: httpx.Client | None = None) -> tuple[list[Job], str]:
     """Return (jobs, method_used). Raises PageNotReadable if nothing works."""
     client = client or make_client()
@@ -240,16 +285,20 @@ def fetch_jobs(settings: Settings, url: str, client: httpx.Client | None = None)
     platform, board = detect_platform(url)
     if platform in PLATFORM_FETCHERS:
         log.info("Detected %s board '%s', using its public API", platform, board)
-        return PLATFORM_FETCHERS[platform](client, board), f"{platform} API"
+        try:
+            jobs = PLATFORM_FETCHERS[platform](client, board)
+        except (httpx.HTTPError, ValueError) as exc:  # ValueError: response wasn't JSON
+            raise friendly_error(exc, url, platform) from exc
+        if not jobs:
+            raise PageNotReadable(f"This {platform.title()} job board has no open roles right now.")
+        return jobs, f"{platform} API"
 
     log.info("Fetching page %s", url)
     try:
         resp = client.get(url)
         resp.raise_for_status()
-    except httpx.HTTPStatusError as exc:
-        raise PageNotReadable(f"The site returned {exc.response.status_code} for this page.") from exc
     except httpx.HTTPError as exc:
-        raise PageNotReadable(f"Could not reach the page: {exc}") from exc
+        raise friendly_error(exc, url) from exc
     page_html, final_url = resp.text, str(resp.url)
 
     embedded = find_embedded_board(page_html)
@@ -272,7 +321,7 @@ def fetch_jobs(settings: Settings, url: str, client: httpx.Client | None = None)
         return jobs, "page links read by LLM"
 
     raise PageNotReadable(
-        "No job openings found on this page. It may load jobs with JavaScript "
-        "(support coming in a later step) or need a login. "
-        "Try the company's 'View all jobs' link, or use the score command with a pasted job description."
+        "No job openings were found on this page. Some careers pages only show jobs after "
+        "JavaScript runs, or need a login. Try the company's \"View all jobs\" link, or "
+        + PASTE_TIP[0].lower() + PASTE_TIP[1:]
     )

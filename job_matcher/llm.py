@@ -20,6 +20,15 @@ class LLMError(Exception):
     """Raised when the LLM call fails in a way retrying won't fix."""
 
 
+LLM_MESSAGES = {
+    400: "The AI model couldn't process the request. Try another free model in your .env file.",
+    401: "Your OpenRouter API key was rejected. Check OPENROUTER_API_KEY in your .env file.",
+    402: "This model needs paid credits. Pick a model ending in :free in your .env file.",
+    403: "OpenRouter blocked this request. The model may be unavailable for your account; try another free model.",
+    404: "That model wasn't found on OpenRouter. Run: python -m job_matcher models   and copy a name from the list.",
+}
+
+
 def chat(settings: Settings, messages: list[dict], temperature: float = 0.2) -> str:
     """Send messages to the model and return the reply text.
 
@@ -51,16 +60,23 @@ def chat(settings: Settings, messages: list[dict], temperature: float = 0.2) -> 
             continue
 
         if resp.status_code != 200:
-            # 401 = bad key, 400 = bad request, 404 = model name wrong. Retrying won't help.
-            raise LLMError(f"LLM request failed ({resp.status_code}): {resp.text[:400]}")
+            # Retrying won't help these. Log the raw reply for debugging,
+            # but show the user a message that says what to fix.
+            log.error("LLM request failed (%d): %s", resp.status_code, resp.text[:400])
+            raise LLMError(LLM_MESSAGES.get(
+                resp.status_code,
+                f"The AI model returned an error (code {resp.status_code}). "
+                "Run with -v or check the terminal for details."))
 
         data = resp.json()
         if "error" in data:
-            raise LLMError(f"LLM returned an error: {data['error']}")
+            log.error("LLM returned an error: %s", data["error"])
+            raise LLMError("The AI model returned an error. Wait a minute and try again, or pick another free model.")
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError):
-            raise LLMError(f"Unexpected response shape: {str(data)[:400]}")
+            log.error("Unexpected LLM response shape: %s", str(data)[:400])
+            raise LLMError("The AI model sent back an empty or unusual reply. Try again, or pick another free model.")
 
         usage = data.get("usage") or {}
         log.info("LLM tokens: prompt=%s completion=%s",
@@ -68,8 +84,8 @@ def chat(settings: Settings, messages: list[dict], temperature: float = 0.2) -> 
         return content or ""
 
     raise LLMError(
-        "LLM failed after 4 attempts. Free models have per-minute and daily limits; "
-        "wait a minute and try again, or pick another free model."
+        "The free AI model is busy or you've reached its usage limit. "
+        "Wait a minute and try again, or pick another free model."
     )
 
 

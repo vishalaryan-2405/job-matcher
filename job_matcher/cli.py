@@ -80,9 +80,31 @@ def cmd_score(args) -> int:
     return 0
 
 
+NOT_CHAT = ("safety", "guard", "moderation", "embed", "rerank", "classif", "decider", "whisper", "tts", "image")
+
+
+def cmd_models(args) -> int:
+    """List free chat models on OpenRouter (the list changes often, so we ask the API)."""
+    import httpx
+    resp = httpx.get("https://openrouter.ai/api/v1/models", timeout=30)
+    resp.raise_for_status()
+    models = []
+    for m in resp.json().get("data", []):
+        mid = m.get("id", "")
+        outputs = (m.get("architecture") or {}).get("output_modalities") or ["text"]
+        if mid.endswith(":free") and "text" in outputs and not any(w in mid.lower() for w in NOT_CHAT):
+            models.append((m.get("context_length") or 0, mid))
+    if not models:
+        print("No free chat models found right now.")
+        return 1
+    print("Free chat models (copy one into MODEL= in your .env):\n")
+    for ctx, mid in sorted(models, reverse=True):
+        print(f"  {mid}   (context: {ctx:,} tokens)")
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="job_matcher", description="Match your resume to a company's open jobs.")
-    parser.add_argument("-v", "--verbose", action="store_true", help="show detailed logs")
     sub = parser.add_subparsers(dest="command", required=True)
 
     m = sub.add_parser("match", help="match against a careers page")
@@ -91,6 +113,7 @@ def main(argv=None) -> int:
     m.add_argument("--location", help="keep only jobs in this location (remote jobs are kept)")
     m.add_argument("--min-score", type=int, default=50, help="hide results below this score")
     m.add_argument("--no-cache", action="store_true", help="re-parse the resume")
+    m.add_argument("-v", "--verbose", action="store_true", help="show detailed logs")
     m.set_defaults(func=cmd_match)
 
     s = sub.add_parser("score", help="score against one pasted job description")
@@ -98,7 +121,12 @@ def main(argv=None) -> int:
     s.add_argument("--jd", required=True, help="text file with the job description")
     s.add_argument("--title", help="job title (default: first line of the file)")
     s.add_argument("--no-cache", action="store_true")
+    s.add_argument("-v", "--verbose", action="store_true", help="show detailed logs")
     s.set_defaults(func=cmd_score)
+
+    ml = sub.add_parser("models", help="list free chat models you can use")
+    ml.add_argument("-v", "--verbose", action="store_true", help="show detailed logs")
+    ml.set_defaults(func=cmd_models)
 
     args = parser.parse_args(argv)
     logging.basicConfig(

@@ -59,6 +59,41 @@ Options: `--location` keeps jobs in that place plus remote ones, `--min-score 60
 hides weaker matches, `--no-cache` re-reads your resume, `-v` shows every step.
 Full results are saved to `results/` as JSON.
 
+## Web app
+
+```bash
+pip install -r requirements.txt
+uvicorn job_matcher.web:app --reload
+```
+
+Open http://127.0.0.1:8000 in your browser. Upload your resume, paste a careers
+page link (or switch to "Paste a job"), and press **Find matching roles**.
+Stop the server with Ctrl+C.
+
+How it works: the page sends your resume and link to `POST /api/match`, which
+starts the work in a background thread and returns a job id at once. The page
+then asks `GET /api/jobs/{id}` every second for progress and results, because
+scoring takes about a minute on free models. `GET /api/health` checks your `.env`.
+
+## Deploy (Render, free)
+
+The code goes to GitHub without `.env`, so your key and model never leave your
+computer. Render gets them as private settings.
+
+1. **Upload to GitHub:** in VS Code, open Source Control and click **Publish to GitHub**.
+2. **Create the service:** on render.com, sign in with GitHub, click
+   **New → Blueprint**, and pick this repository. Render reads `render.yaml`.
+3. **Fill in the three secrets** Render asks for:
+   - `OPENROUTER_API_KEY`: your key
+   - `MODEL`: your free model ID
+   - `APP_PASSWORD`: a password visitors must type (protects your free quota)
+4. Click **Apply**. The first build takes a few minutes; then you get a
+   `https://job-matcher-xxxx.onrender.com` link.
+
+Every `git push` redeploys automatically.
+Free Render services sleep after about 15
+minutes without visitors, so the first visit after a break takes up to a minute.
+
 ## How it works
 
 ```
@@ -92,6 +127,7 @@ websites; this code fetches pages and hands the text to the LLM.
 | `resume.py` | PDF text extraction, structured extraction prompt, caching to save API calls |
 | `fetchers.py` | Calling public APIs, HTML parsing, JSON-LD, the fallback chain |
 | `matcher.py` | Two-stage retrieval: cheap TF-IDF filter, then expensive LLM scoring |
+| `web.py` + `static/index.html` | FastAPI endpoints, file uploads, background jobs with polling, a page built with plain HTML/JS |
 | `cli.py` | Commands and arguments, clean error messages instead of stack traces |
 | `tests/test_core.py` | Testing without internet by faking the LLM (mocking) |
 
@@ -99,5 +135,5 @@ websites; this code fetches pages and hands the text to the LLM.
 
 - Pages that load jobs only with JavaScript (e.g. Workday) → add Playwright
 - Matching uses TF-IDF keywords → upgrade to embeddings for meaning-based matching
-- Command line only → add a FastAPI backend and a simple web page, then deploy
+- Package with Docker so it runs the same everywhere
 - Free models have per-minute and daily request limits; the app waits and retries on 429

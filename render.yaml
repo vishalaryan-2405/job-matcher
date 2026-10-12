@@ -1,0 +1,20 @@
+# Render reads this file to create the web service ("Blueprint").
+# Secrets are NOT stored here: "sync: false" means Render asks you to type
+# the value in its dashboard, where it stays private.
+services:
+  - type: web
+    name: job-matcher
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn job_matcher.web:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: MODEL
+        sync: false
+      - key: APP_PASSWORD
+        sync: false

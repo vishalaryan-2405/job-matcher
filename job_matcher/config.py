@@ -40,6 +40,12 @@ def get_settings() -> Settings:
             f"MODEL '{model}' is not a free model. Use an OpenRouter model ID ending in ':free'."
         )
 
+    if any(w in model.lower() for w in ("safety", "guard", "moderation", "embed")):
+        raise RuntimeError(
+            f"MODEL '{model}' is a classifier, not a chat model, so it can't score resumes. "
+            "Run: python -m job_matcher models   and pick a chat model from the list."
+        )
+
     return Settings(
         api_key=api_key,
         model=model,

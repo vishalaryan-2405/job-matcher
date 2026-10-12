@@ -1,7 +1,13 @@
-.venv/
+# Secrets: never upload
 .env
+
+# Personal files
+*.pdf
+results/
+.cache/
+
+# Python and tool junk
+.venv/
+venv/
 __pycache__/
 .pytest_cache/
-.cache/
-results/
-*.pdf
